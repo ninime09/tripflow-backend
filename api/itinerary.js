@@ -7,7 +7,7 @@ function json(res, status, data) {
 }
 
 export default async function handler(req, res) {
-  // CORS 设置
+  // CORS 
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-user-id");
@@ -17,40 +17,34 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    
-    // 之前日志显示你的环境变量是能读到的，只是库不对
-    if (!apiKey) return json(res, 500, { error: "Missing API_KEY env variable" });
+    // 强制指定模型为你在 Vercel 设置的变量，如果没有则手动锁定 gemini-2.5-flash
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-    let body = req.body;
-    if (typeof body === 'string') { 
-      try { body = JSON.parse(body); } catch(e) { console.error("JSON parse error"); }
-    }
-    
-    const { prompt } = body || {};
+    if (!apiKey) return json(res, 500, { error: "Missing API_KEY" });
+
+    // 使用官方标准初始化
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: modelName });
+
+    const { prompt } = req.body || {};
     if (!prompt) return json(res, 400, { error: "Missing prompt" });
 
-    // 1. 初始化官方 SDK (这是标准写法)
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    // 2. 获取模型 (推荐使用 gemini-1.5-flash，它在 DC 地区最稳定)
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    // 3. 执行生成任务
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
-
+    
     return json(res, 200, { 
-      text, 
-      model: "gemini-1.5-flash",
+      text: response.text(), 
+      model: modelName, 
       status: "success" 
     });
-
   } catch (e) {
-    console.error("Gemini API Error:", e.message);
+    // 报错时输出具体的模型名称，排查为什么会跳到 1.5
     return json(res, 500, { 
-      error: e.message,
-      tip: "Ensure @google/generative-ai is installed correctly."
+      error: e.message, 
+      debug_info: {
+        attempted_model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+        sdk: "@google/generative-ai"
+      }
     });
   }
 }
