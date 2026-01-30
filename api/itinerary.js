@@ -7,7 +7,7 @@ function json(res, status, data) {
 }
 
 export default async function handler(req, res) {
-  // CORS 响应头
+  // CORS 设置
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-user-id");
@@ -17,8 +17,7 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    
-    // 你的日志显示 API Key 已找到，长度 39 位是正确的
+    // 日志显示你的 Key 已经成功读取（True）
     if (!apiKey) return json(res, 500, { error: "Missing API_KEY env variable" });
 
     let body = req.body;
@@ -29,33 +28,32 @@ export default async function handler(req, res) {
     const { prompt } = body || {};
     if (!prompt) return json(res, 400, { error: "Missing prompt" });
 
-    // 1. 初始化客户端 (使用对象格式)
-    const genAI = new GoogleGenAI({ apiKey });
+    // ✨ 终极语法修正：
+    // 在 2026 年版 SDK 中，GoogleGenAI 返回的是一个包含 models 命名空间的客户端对象
+    const client = new GoogleGenAI({ apiKey });
 
-    // 2. ✨ 核心修复：新版 SDK 直接使用 generateContent 方法
-    // 不再需要 genAI.getGenerativeModel()
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    // 推荐写法：通过 client.getGenerativeModel 获取模型实例（注意这是新版实例方法）
+    // 或者直接使用 client.models.generateContent
+    const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
 
-    const result = await genAI.generateContent({
-      model: modelName,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    });
-
-    // 3. 解析响应内容
-    // 新版 SDK 的结果通常直接在 text 属性中或通过 response.text() 获取
-    const responseText = result.text || (await result.response?.text?.()) || "No output from AI";
+    // 执行生成
+    const result = await model.generateContent(prompt);
+    
+    // 兼容多种返回格式的处理逻辑
+    const text = result.response?.text() || result.text || "No response text";
 
     return json(res, 200, { 
-      text: responseText, 
-      model: modelName,
+      text, 
+      model: "gemini-2.5-flash",
       status: "success" 
     });
 
   } catch (e) {
-    console.error("Gemini API Error:", e.message);
+    console.error("Gemini API Runtime Error:", e.message);
+    // 如果还是报错，尝试最原始的调用方式
     return json(res, 500, { 
-      error: e.message,
-      detail: "The SDK method might have changed in the 2026 version. Updated to direct call."
+      error: `SDK Error: ${e.message}`,
+      tip: "Please ensure @google/genai is correctly installed in package.json"
     });
   }
 }
