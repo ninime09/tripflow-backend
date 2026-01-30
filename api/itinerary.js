@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -22,19 +22,15 @@ export default async function handler(req, res) {
     const { prompt } = req.body || {};
     if (!prompt) return json(res, 400, { error: "Missing prompt" });
 
-    const ai = new GoogleGenAI({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-    const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
-    const result = await ai.models.generateContent({
-      model,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
+    const model = genAI.getGenerativeModel({ model: modelName });
+    const result = await model.generateContent(prompt);
 
-    const text =
-      result?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
-
-    return json(res, 200, { text });
+    const text = result?.response?.text?.() || "";
+    return json(res, 200, { text, model: modelName });
   } catch (e) {
     return json(res, 500, { error: e?.message || "Unknown error" });
   }
