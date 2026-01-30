@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 
   try {
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) return json(res, 500, { error: "Missing API_KEY env variable" });
 
     // 确保解析了 body (Vercel 会自动解析 JSON body)

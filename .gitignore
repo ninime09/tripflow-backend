@@ -4,5 +4,7 @@ node_modules/
 # system files
 .DS_Store
 
-# env
+# 忽略所有的环境变量配置文件
 .env
+.env.local
+.env.*
