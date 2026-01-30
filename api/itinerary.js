@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -17,7 +17,8 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    // 日志显示你的 Key 已经成功读取（True）
+    
+    // 之前日志显示你的环境变量是能读到的，只是库不对
     if (!apiKey) return json(res, 500, { error: "Missing API_KEY env variable" });
 
     let body = req.body;
@@ -28,32 +29,28 @@ export default async function handler(req, res) {
     const { prompt } = body || {};
     if (!prompt) return json(res, 400, { error: "Missing prompt" });
 
-    // ✨ 终极语法修正：
-    // 在 2026 年版 SDK 中，GoogleGenAI 返回的是一个包含 models 命名空间的客户端对象
-    const client = new GoogleGenAI({ apiKey });
+    // 1. 初始化官方 SDK (这是标准写法)
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-    // 推荐写法：通过 client.getGenerativeModel 获取模型实例（注意这是新版实例方法）
-    // 或者直接使用 client.models.generateContent
-    const model = client.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash" });
+    // 2. 获取模型 (推荐使用 gemini-1.5-flash，它在 DC 地区最稳定)
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // 执行生成
+    // 3. 执行生成任务
     const result = await model.generateContent(prompt);
-    
-    // 兼容多种返回格式的处理逻辑
-    const text = result.response?.text() || result.text || "No response text";
+    const response = await result.response;
+    const text = response.text();
 
     return json(res, 200, { 
       text, 
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       status: "success" 
     });
 
   } catch (e) {
-    console.error("Gemini API Runtime Error:", e.message);
-    // 如果还是报错，尝试最原始的调用方式
+    console.error("Gemini API Error:", e.message);
     return json(res, 500, { 
-      error: `SDK Error: ${e.message}`,
-      tip: "Please ensure @google/genai is correctly installed in package.json"
+      error: e.message,
+      tip: "Ensure @google/generative-ai is installed correctly."
     });
   }
 }
