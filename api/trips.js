@@ -1,9 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -11,12 +15,26 @@ function json(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+function setCors(res) {
+  // MVP 先用 *，上线后建议换成你的前端域名（更安全）
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-User-Id");
+}
+
 export default async function handler(req, res) {
+  setCors(res);
+
+  // 预检请求：浏览器会先发 OPTIONS
+  if (req.method === "OPTIONS") {
+    res.statusCode = 200;
+    return res.end();
+  }
+
   try {
-    // 你前端先生成一个匿名 userId（存在 localStorage），每次请求带过来
     const userId =
-      req.query.userId ||
-      (req.body && req.body.userId) ||
+      req.query?.userId ||
+      req.body?.userId ||
       req.headers["x-user-id"];
 
     if (!userId) return json(res, 400, { error: "Missing userId" });
@@ -42,7 +60,7 @@ export default async function handler(req, res) {
         destination: destination || null,
         start_date: startDate || null,
         end_date: endDate || null,
-        itinerary
+        itinerary,
       };
 
       const { data, error } = await supabase
@@ -55,9 +73,10 @@ export default async function handler(req, res) {
       return json(res, 200, { trip: data });
     }
 
-    res.setHeader("Allow", "GET, POST");
+    res.setHeader("Allow", "GET, POST, OPTIONS");
     return json(res, 405, { error: "Method not allowed" });
   } catch (e) {
     return json(res, 500, { error: e?.message || "Unknown error" });
   }
 }
+
