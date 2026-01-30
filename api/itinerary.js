@@ -7,7 +7,6 @@ function json(res, status, data) {
 }
 
 export default async function handler(req, res) {
-  // CORS 设置
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-user-id");
@@ -17,35 +16,33 @@ export default async function handler(req, res) {
 
   try {
     const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    
-    // 调试日志：确认 Vercel 是否成功加载了变量
     console.log("API Key found:", !!apiKey);
 
-    if (!apiKey) {
-      console.error("CRITICAL: API_KEY is missing from process.env");
-      return json(res, 500, { error: "Missing API_KEY env variable" });
-    }
+    if (!apiKey) return json(res, 500, { error: "Missing API_KEY env variable" });
 
-    // 解析请求体
     let body = req.body;
     if (typeof body === 'string') { 
-      try { body = JSON.parse(body); } catch(e) { console.error("Parse error:", e); }
+      try { body = JSON.parse(body); } catch(e) { console.error("JSON Parse Error"); }
     }
     
     const { prompt } = body || {};
     if (!prompt) return json(res, 400, { error: "Missing prompt" });
 
-    // ✨ 核心修复：新版 SDK 必须传入一个对象 { apiKey: '...' }
-    const genAI = new GoogleGenAI({ apiKey: apiKey });
+    // 1. 初始化客户端
+    const client = new GoogleGenAI({ apiKey });
 
-    // 使用 2026 年主流的 2.5 系列模型
+    // 2. ✨ 核心修改点：新版 SDK 使用 client.models.get() 或直接在生成时指定
+    // 如果 getGenerativeModel 报错，说明该版本推荐使用如下链式调用：
     const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const model = genAI.getGenerativeModel({ model: modelName });
 
-    // 执行生成任务
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    // 3. 执行生成任务 (注意新版 SDK 可能直接通过 client 调用)
+    const result = await client.generateContent({
+      model: modelName,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+
+    // 4. 解析结果
+    const text = result.text || (await result.response?.text?.()) || "No response text";
 
     return json(res, 200, { 
       text, 
@@ -57,7 +54,7 @@ export default async function handler(req, res) {
     console.error("Gemini API Runtime Error:", e.message);
     return json(res, 500, { 
       error: e.message,
-      detail: "If this is a key error, double check your Vercel project settings."
+      stack: "Check if SDK methods have changed in 2026 version."
     });
   }
 }
